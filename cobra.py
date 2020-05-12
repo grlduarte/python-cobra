@@ -9,21 +9,6 @@ import tkinter as tk
 import numpy as np
 
 
-class Grid:
-    def __init__(self, columns, rows, step):
-        self.grid = dict()
-        self.ocup = dict()
-        for i in range(columns):
-            for j in range(rows):
-                self.grid[(i, j)] = (step*i, step*j, step*(i+1), step*(j+1))
-                self.ocup[(i, j)] = False
-
-        self.center = self.grid[(columns//2, rows//2)]
-
-    def __call__(self, x, y):
-        return self.grid[(x, y)]
-
-
 class Game(tk.Canvas):
     def __init__(self, master=None, config_file='defaults.cfg'):
         self.load_config(config_file)
@@ -45,17 +30,19 @@ class Game(tk.Canvas):
 
         self.columns = int(self.width / self.dot_size)
         self.rows = int(self.height / self.dot_size)
-        self.grid2d = Grid(self.columns, self.rows, self.dot_size)
 
-        self.level = 1
-        self.delay = int(self.time_step / self.level)
+        self.delay = 200
+
+
+    def rect_coords(self, x, y):
+        return (x, y, x+self.dot_size, y+self.dot_size)
 
 
     def handle_key(self, event):
         key = event.keysym
         if self.running:
             if key == 'Up' and self.dy == 0:
-                self.dx = 0
+                self.dx = 1
                 self.dy = -self.dot_size
 
             elif key == 'Down' and self.dy == 0:
@@ -74,9 +61,6 @@ class Game(tk.Canvas):
                 self.running = False
                 self.after_cancel(self.ident)
             
-            elif key == 'space':
-                self.eat_food()
-
         else:
             self.running = True
             self.ident = self.after(self.delay, self.draw_screen)
@@ -86,42 +70,34 @@ class Game(tk.Canvas):
         self.alive = True
         self.running = True
         self.score = 0
+
         self.dx, self.dy = 0, 0
-        self.create_rectangle(self.grid2d.center, fill=self.color_snake, tag='head')
+        coords = self.rect_coords(self.width // 2, self.height // 2)
+        self.create_rectangle(coords, fill=self.color_snake, tag='head')
+
         self.place_food(first=True)
         self.ident = self.after(self.delay, self.draw_screen)
 
 
     def draw_screen(self):
-        x, y = self.move_head()
-        for i in range(self.score):
-            tag = f'dot{i}'
-            x, y = self.move_body(tag, x, y)
+        self.check_collision()
+        if self.alive and self.running:
+            if self.coords('head') == self.coords('food'):
+                self.eat_food()
 
-        if self.coords('head') == self.coords('food'):
-            self.eat_food()
+            x, y = self.move_head()
+            for i in range(self.score):
+                tag = f'dot{i}'
+                x, y = self.move_body(tag, x, y)
 
-        self.ident = self.after(self.delay, self.draw_screen)
-
-
-    def place_food(self, first=False):
-        x, y = np.random.randint((0, 0), (self.columns, self.rows), 2)
-        coords = self.grid2d(x, y)
-        if first:
-            self.create_rectangle(coords, fill='red', tag='food')
-        else:
-            x, y = coords[:2]
-            self.moveto('food', x-1, y-1)
+            self.ident = self.after(self.delay, self.draw_screen)
 
 
-    def eat_food(self):
-        self.place_food()
-        if self.score == 0:
-            coords = self.coords('head')
-        else:
-            coords = self.coords(f'dot{self.score-1}')
-        self.create_rectangle(coords, fill=self.color_snake, tag=f'dot{self.score}')
-        self.score += 1
+    def check_collision(self):
+        head = self.coords('head')[:2]
+        body = [self.coords(f'dot{i}')[:2] for i in range(self.score)]
+        if (head in body) and (self.score > 0):
+            self.die()
 
 
     def move_head(self):
@@ -146,3 +122,29 @@ class Game(tk.Canvas):
         # For some reason, moveto moves to coords+1
         self.moveto(tag, x-1, y-1)
         return xold, yold
+
+
+    def place_food(self, first=False):
+        x, y = np.random.randint((0, 0), (self.columns, self.rows), 2)
+        coords = self.rect_coords(self.dot_size*x, self.dot_size*y)
+        if first:
+            self.create_rectangle(coords, fill='red', tag='food')
+        else:
+            x, y = coords[:2]
+            self.moveto('food', x-1, y-1)
+
+
+    def eat_food(self):
+        self.place_food()
+        if self.score == 0:
+            coords = self.coords('head')
+        else:
+            coords = self.coords(f'dot{self.score-1}')
+
+        self.create_rectangle(coords, fill=self.color_snake, tag=f'dot{self.score}')
+        self.score += 1
+
+
+    def die(self):
+        self.alive = False
+        print(f"Game over: {self.score}")
