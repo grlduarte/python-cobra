@@ -8,29 +8,42 @@ import tkinter as tk
 
 import numpy as np
 
+COLUMNS = 30
+ROWS = 20
+DOT_SIZE = 20
+WIDTH = COLUMNS * DOT_SIZE
+HEIGHT = ROWS * DOT_SIZE
+FONT = 'fixed'
+
 
 class Game(tk.Canvas):
-    def __init__(self, master=None, config_file='defaults.cfg'):
+    def __init__(self, master, scoreboard, levelboard,
+                 config_file='defaults.cfg'):
         self.load_config(config_file)
         self.master = master
+        self.scoreboard = scoreboard
+        self.levelboard = levelboard
         super().__init__(master, bg=self.color_background,
                          width=self.width, height=self.height)
 
         self.bind_all('<Key>', self.handle_key)
         self.run()
-        self.pack()
+        self.pack(side=tk.TOP)
 
 
     def load_config(self, config_file):
-        self.width = 300
-        self.height = 300
-        self.dot_size = 10
+        self.columns = COLUMNS
+        self.rows = ROWS
+        self.width = WIDTH
+        self.height = HEIGHT
+        self.dot_size = DOT_SIZE
         self.initial_length = 5
-        self.columns = int(self.width / self.dot_size)
-        self.rows = int(self.height / self.dot_size)
 
         self.time_step = {1: 500, 2: 350, 3: 200,
                           4: 100, 5: 50, 6: 30}
+
+        with open('highscore', 'r') as f:
+            self.highscore = int(f.read().strip())
 
         config = configparser.ConfigParser()
         config.read(config_file)
@@ -43,14 +56,20 @@ class Game(tk.Canvas):
         self.obstacles = []
 
 
+    def record_highscore(self):
+        with open('highscore', 'w') as f:
+            f.write(f'{self.highscore}')
+
+
     def rect_coords(self, x, y):
-        return (x, y, x+self.dot_size, y+self.dot_size)
+        return [x, y, x+self.dot_size, y+self.dot_size]
 
 
     def handle_key(self, event):
         key = event.keysym
 
         if key == 'q':
+            self.record_highscore()
             self.master.destroy()
 
         if self.running:
@@ -90,6 +109,8 @@ class Game(tk.Canvas):
         self.alive = True
         self.running = False
         self.score = 0
+        self.scoreboard.update(self.score)
+        self.levelboard.update(self.level, self.highscore)
 
         self.dx, self.dy = self.dot_size, 0
         self.draw_snake()
@@ -171,8 +192,8 @@ class Game(tk.Canvas):
         x, y = np.random.randint((0, 0), (self.columns, self.rows), 2)
         coords = self.rect_coords(self.dot_size*x, self.dot_size*y)
         
-        head = self.coords('head')[:2]
-        body = [self.coords(f'dot{i}')[:2] for i in range(self.length)]
+        head = [self.coords('head')]
+        body = [self.coords(f'dot{i}') for i in range(self.length)]
         while coords in (head + body):
             x, y = np.random.randint((0, 0), (self.columns, self.rows), 2)
             coords = self.rect_coords(self.dot_size*x, self.dot_size*y)
@@ -195,6 +216,11 @@ class Game(tk.Canvas):
         self.create_rectangle(coords, fill=self.color_snake, tag=f'dot{self.length}')
         self.score += self.level
         self.length += 1
+        
+        if self.score > self.highscore:
+            self.highscore = self.score
+        self.scoreboard.update(self.score)
+        self.levelboard.update(self.level, self.highscore)
 
 
     def die(self):
@@ -202,3 +228,51 @@ class Game(tk.Canvas):
         self.running = False
         self.after_cancel(self.ident)
         print(f"Game over: {self.score}")
+
+
+class TopBoard(tk.Frame):
+    def __init__(self, master):
+        self.master = master
+        self.width = WIDTH
+        self.height = 2 * DOT_SIZE
+        super().__init__(master, width=self.width, height=self.height, bg='black')
+
+        self.pack(side=tk.TOP)
+        self.pack_propagate(False)
+
+        self.score = tk.Label(self, bg='black', fg='white',
+                              font=(FONT, self.height))
+        self.score.pack(side=tk.BOTTOM)
+        
+    def update(self, score):
+        self.score.config(text=f'{score}')
+
+
+class BottomBoard(tk.Frame):
+    def __init__(self, master):
+        self.master = master
+        self.width = WIDTH
+        self.height = DOT_SIZE
+        super().__init__(master, width=self.width, height=self.height, bg='black')
+
+        self.pack(side=tk.BOTTOM)
+        self.pack_propagate(False)
+
+        self.level = tk.Label(self, bg='black', fg='white',
+                              font=(FONT, self.height))
+        self.level.pack(side=tk.LEFT)
+        self.score = tk.Label(self, bg='black', fg='white',
+                              font=(FONT, self.height))
+        self.score.pack(side=tk.RIGHT)
+
+    def update(self, level, highscore):
+        self.level.config(text=f'LEVEL {level}')
+        self.score.config(text=f'HIGHSCORE {highscore}')
+
+
+def main():
+    root = tk.Tk()
+    scoreboard = TopBoard(root)
+    levelboard = BottomBoard(root)
+    game = Game(root, scoreboard, levelboard)
+    root.mainloop()
