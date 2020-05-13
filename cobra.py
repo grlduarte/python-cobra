@@ -8,6 +8,7 @@ import tkinter as tk
 
 import numpy as np
 
+
 COLUMNS = 30
 ROWS = 20
 DOT_SIZE = 20
@@ -43,7 +44,8 @@ class Game(tk.Canvas):
                           4: 100, 5: 50, 6: 30}
 
         with open('highscore', 'r') as f:
-            self.highscore = int(f.read().strip())
+            lines = f.readlines()
+        self.highscore = [int(line.strip()) for line in lines]
 
         config = configparser.ConfigParser()
         config.read(config_file)
@@ -53,12 +55,13 @@ class Game(tk.Canvas):
             setattr(self, 'color_'+cfg, config['COLOR'][cfg])
 
         self.delay = self.time_step[self.level]
-        self.obstacles = []
 
 
     def record_highscore(self):
+        highscore = [str(h) for h in self.highscore]
+        s = '\n'.join(highscore)
         with open('highscore', 'w') as f:
-            f.write(f'{self.highscore}')
+            f.write(s)
 
 
     def rect_coords(self, x, y):
@@ -110,10 +113,11 @@ class Game(tk.Canvas):
         self.running = False
         self.score = 0
         self.scoreboard.update(self.score)
-        self.levelboard.update(self.level, self.highscore)
+        self.levelboard.update(self.level, self.highscore[self.stage])
 
         self.dx, self.dy = self.dot_size, 0
         self.draw_snake()
+        self.load_stage()
 
         self.place_food(first=True)
         self.ident = self.after(self.delay, self.step)
@@ -131,6 +135,25 @@ class Game(tk.Canvas):
             self.create_rectangle(x1, y1, x2, y2, fill=self.color_snake, tag=tag)
 
 
+    def load_stage(self):
+        self.walls = []
+        if not (self.stage == 0):
+            with open(f'stage{self.stage}.stg', 'r') as f:
+                obstacles = f.readlines()
+            obstacles = [line.strip().split(',') for line in obstacles]
+            obstacles = np.array(obstacles).astype(int)
+            for obs in obstacles:
+                self.draw_walls(obs[:2], obs[2:])
+                
+
+    def draw_walls(self, x, y):
+        for i in range(*x):
+            for j in range(*y):
+                coords = self.rect_coords(i * self.dot_size, j * self.dot_size)
+                self.walls.append(coords[:2])
+                self.create_rectangle(coords, fill=self.color_snake, tag='wall')
+
+
     def step(self):
         '''Function for each time step of the game'''
         self.check_collision()
@@ -144,7 +167,7 @@ class Game(tk.Canvas):
         head = self.coords('head')[:2]
         body = [self.coords(f'dot{i}')[:2] for i in range(self.length)]
         
-        if (head in body):
+        if head in (body + self.walls):
             self.die()
 
 
@@ -192,9 +215,9 @@ class Game(tk.Canvas):
         x, y = np.random.randint((0, 0), (self.columns, self.rows), 2)
         coords = self.rect_coords(self.dot_size*x, self.dot_size*y)
         
-        head = [self.coords('head')]
-        body = [self.coords(f'dot{i}') for i in range(self.length)]
-        while coords in (head + body):
+        head = [self.coords('head')[:2]]
+        body = [self.coords(f'dot{i}')[:2] for i in range(self.length)]
+        while coords[:2] in (head + body + self.walls):
             x, y = np.random.randint((0, 0), (self.columns, self.rows), 2)
             coords = self.rect_coords(self.dot_size*x, self.dot_size*y)
 
@@ -217,17 +240,21 @@ class Game(tk.Canvas):
         self.score += self.level
         self.length += 1
         
-        if self.score > self.highscore:
-            self.highscore = self.score
+        if self.score > self.highscore[self.stage]:
+            self.highscore[self.stage] = self.score
         self.scoreboard.update(self.score)
-        self.levelboard.update(self.level, self.highscore)
+        self.levelboard.update(self.level, self.highscore[self.stage])
 
 
     def die(self):
+        self.itemconfig('head', fill='gray')
+        for i in range(self.length):
+            tag = f'dot{i}'
+            self.itemconfig(tag, fill='gray')
+
         self.alive = False
         self.running = False
         self.after_cancel(self.ident)
-        print(f"Game over: {self.score}")
 
 
 class TopBoard(tk.Frame):
@@ -276,3 +303,4 @@ def main():
     levelboard = BottomBoard(root)
     game = Game(root, scoreboard, levelboard)
     root.mainloop()
+
