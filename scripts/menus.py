@@ -6,20 +6,20 @@ Created on 16-mai-2020
 from tkinter import *
 import glob
 
-WIDTH = 421
-HEIGHT = 241
 
-class Menu(Canvas):
+class MainMenu(Canvas):
     def __init__(self, master):
         self.master = master
-        self.load_config()
+        self.items = ['new_game', 'level', 'mazes',
+                      'top_scores', 'instructions',
+                      'settings']
         self.load_images()
-        super().__init__(master, bg='#93c000',
-                         width=self.width, height=self.height)
-
-    def load_config(self):
-        self.width = self.master['width']
-        self.height = self.master['height']
+        self.item_coords = [[0, 30], [0, 85],
+                            [0, 140], [0, 190]]
+        super().__init__(master,
+                         bg=self.master['bg'],
+                         width=self.master['width'],
+                         height=self.master['height'])
 
     def load_images(self):
         image_list = glob.glob('img/numbers/*')
@@ -28,10 +28,10 @@ class Menu(Canvas):
             k = i.replace('img/numbers/', '').replace('.xbm', '')
             self.n_img[k] = BitmapImage(file=i)
 
-        image_list = glob.glob('img/menu/*')
+        image_list = glob.glob('img/main_menu/*')
         self.menu_img = {}
         for i in image_list:
-            k = i.replace('img/menu/', '').replace('.xbm', '')
+            k = i.replace('img/main_menu/', '').replace('.xbm', '')
             self.menu_img[k] = BitmapImage(file=i)
 
     def handle_key(self, event):
@@ -46,10 +46,10 @@ class Menu(Canvas):
 
             elif key == 'Return':
                 self.active = False
-                opt = self.displayed[self.highlight]
-                self.master.handle_function(opt)
+                self.master.handle_function(self, self.highlighted)
 
             elif key == 'Escape':
+                self.active = False
                 self.master.close_app()
 
     def start(self):
@@ -57,44 +57,226 @@ class Menu(Canvas):
         self.bind_all('<Key>', self.handle_key)
         self.active = True
 
-        self.highlight = 0
+        self.pointer = 0
         self.scroll = 0
-        self.menu_tag = []
+        self.scroll_lim = len(self.items) - 3
         self.display_menu()
 
     def display_menu(self):
-        self.delete(*self.menu_tag)
-        self.menu_tag = []
+        self.delete(ALL)
 
-        items = ['new_game', 'level', 'mazes', 'top_scores', 'instructions', 'settings']
-        displayed = items[self.scroll:self.scroll+3] + ['select']
-        coords = [[0, 30], [0, 85], [0, 140], [0, 190]]
-        for c, i in zip(coords, displayed):
-            if i == displayed[self.highlight]:
+        self.displayed = self.items[self.scroll:self.scroll+3]
+        self.highlighted = self.displayed[self.pointer]
+        self.displayed += ['select']
+        for c, i in zip(self.item_coords, self.displayed):
+            if i == self.displayed[self.pointer]:
                 img = self.menu_img[i + '_sel']
             else:
                 img = self.menu_img[i]
-            t = self.create_image(c, anchor=NW, image=img)
-            self.menu_tag.append(t)
-        self.displayed = displayed
+            self.create_image(c, anchor=NW, image=img)
 
     def menu_up(self):
-        self.highlight -= 1
-        if self.highlight < 0:
-            self.highlight = 0
+        self.pointer -= 1
+        if self.pointer < 0:
+            self.pointer = 0
             self.scroll -= 1
             if self.scroll < 0:
-                self.highlight = 2
-                self.scroll = 3
+                self.pointer = 2
+                self.scroll = self.scroll_lim
         self.display_menu()
 
     def menu_down(self):
-        self.highlight += 1
-        if self.highlight > 2:
-            self.highlight = 2
+        self.pointer += 1
+        if self.pointer > 2:
+            self.pointer = 2
             self.scroll += 1 
-            if self.scroll > 3:
-                self.highlight = 0
+            if self.scroll > self.scroll_lim:
+                self.pointer = 0
                 self.scroll = 0
         self.display_menu()
 
+    def add_item(self, item):
+        if not (item in self.items):
+            self.items = [item] + self.items
+            self.scroll_lim = len(self.items) - 3
+
+    def remove_item(self, item):
+        try:
+            self.items.remove(item)
+            self.scroll_lim = len(self.items) - 3
+        except ValueError:
+            pass
+
+
+class MazesMenu(Canvas):
+    def __init__(self, master):
+        self.master = master
+        self.items = ['no_maze', 'box', 'tunnel',
+                      'spiral', 'blockade', 'twisted']
+        self.load_images()
+        self.item_coords = [[0, 30], [0, 85],
+                            [0, 140], [0, 190]]
+        super().__init__(master,
+                         bg=self.master['bg'],
+                         width=self.master['width'],
+                         height=self.master['height'])
+
+    def load_images(self):
+        image_list = glob.glob('img/numbers/*')
+        self.n_img = {}
+        for i in image_list:
+            k = i.replace('img/numbers/', '').replace('.xbm', '')
+            self.n_img[k] = BitmapImage(file=i)
+
+        image_list = glob.glob('img/mazes_menu/*')
+        self.menu_img = {}
+        for i in image_list:
+            k = i.replace('img/mazes_menu/', '').replace('.xbm', '')
+            self.menu_img[k] = BitmapImage(file=i)
+
+    def handle_key(self, event):
+        key = event.keysym
+
+        if self.active:
+            if key == 'Up':
+                self.menu_up()
+
+            elif key == 'Down':
+                self.menu_down()
+
+            elif key == 'Return':
+                self.active = False
+                self.options[1] = self.highlighted
+                with open('options', 'w') as f:
+                    f.writelines(self.options)
+                self.master.handle_function(self, 'main_menu')
+
+            elif key == 'Escape':
+                self.active = False
+                self.master.handle_function(self, 'main_menu',
+                                            onpause=self.master.game.ingame)
+
+    def start(self):
+        self.pack(side=TOP)
+        self.bind_all('<Key>', self.handle_key)
+        self.active = True
+
+        with open('options', 'r') as f:
+            self.options = f.readlines()
+
+        self.pointer = 0
+        self.scroll = 0
+        self.scroll_lim = len(self.items) - 3
+        self.display_menu()
+
+    def display_menu(self):
+        self.delete(ALL)
+
+        self.displayed = self.items[self.scroll:self.scroll+3]
+        self.highlighted = self.displayed[self.pointer]
+        self.displayed += ['select']
+        for c, i in zip(self.item_coords, self.displayed):
+            if i == self.displayed[self.pointer]:
+                img = self.menu_img[i + '_sel']
+            else:
+                img = self.menu_img[i]
+            self.create_image(c, anchor=NW, image=img)
+
+    def menu_up(self):
+        self.pointer -= 1
+        if self.pointer < 0:
+            self.pointer = 0
+            self.scroll -= 1
+            if self.scroll < 0:
+                self.pointer = 2
+                self.scroll = self.scroll_lim
+        self.display_menu()
+
+    def menu_down(self):
+        self.pointer += 1
+        if self.pointer > 2:
+            self.pointer = 2
+            self.scroll += 1 
+            if self.scroll > self.scroll_lim:
+                self.pointer = 0
+                self.scroll = 0
+        self.display_menu()
+
+    def add_item(self, item):
+        if not (item in self.items):
+            self.items = [item] + self.items
+            self.scroll_lim = len(self.items) - 3
+
+    def remove_item(self, item):
+        try:
+            self.items.remove(item)
+            self.scroll_lim = len(self.items) - 3
+        except ValueError:
+            pass
+
+
+
+class LevelMenu(Canvas):
+    def __init__(self, master):
+        self.master = master
+        self.load_images()
+        super().__init__(master,
+                         bg=self.master['bg'],
+                         width=self.master['width'],
+                         height=self.master['height'])
+
+    def load_images(self):
+        image_list = glob.glob('img/level_menu/*')
+        self.level_img = {}
+        for i in image_list:
+            k = i.replace('img/level_menu/', '').replace('.xbm', '')
+            self.level_img[k] = BitmapImage(file=i)
+
+    def handle_key(self, event):
+        key = event.keysym
+
+        if self.active:
+            if key == 'Up' or key == 'Right':
+                self.menu_up()
+
+            elif key == 'Down' or key == 'Left':
+                self.menu_down()
+
+            elif key == 'Return':
+                self.active = False
+                self.options[0] = str(self.level)
+                with open('options', 'w') as f:
+                    f.write('\n'.join(self.options))
+                self.master.handle_function(self, 'main_menu')
+
+            elif key == 'Escape':
+                self.active = False
+                self.master.handle_function(self, 'main_menu',
+                                            onpause=self.master.game.ingame)
+
+    def start(self):
+        self.pack(side=TOP)
+        self.bind_all('<Key>', self.handle_key)
+        self.active = True
+
+        with open('options', 'r') as f:
+            self.options = f.readlines()
+        self.level = int(self.options[0])
+        self.display_menu()
+
+    def display_menu(self):
+        self.delete(ALL)
+        img = self.level_img[f'level{self.level}']
+        self.create_image([0, 0], anchor=NW, image=img)
+
+    def menu_up(self):
+        self.level += 1
+        if self.level > 9:
+            self.level = 9
+        self.display_menu()
+
+    def menu_down(self):
+        self.level -= 1
+        if self.level < 1:
+            self.level = 1
+        self.display_menu()

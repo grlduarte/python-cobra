@@ -29,6 +29,16 @@ class Game(Canvas):
         self.height = self.master['height']
         self.origin = Vector(10, 50)
 
+    def load_options(self):
+        delay_map = {1: 650, 2: 500, 3: 375,
+                     4: 300, 5: 225, 6: 185,
+                     7: 135, 8: 115, 9: 90}
+        with open('options', 'r') as f:
+            self.options = f.readlines()
+        self.level = int(self.options[0])
+        self.maze = self.options[1]
+        self.delay = delay_map[self.level]
+
     def load_images(self):
         image_list = glob.glob('img/game/*')
         self.game_img = {}
@@ -69,19 +79,21 @@ class Game(Canvas):
 
             elif key == 'Escape':
                 self.after_cancel(self.ident)
-                self.master.handle_function('main_menu')
+                self.master.handle_function(self, 'main_menu', onpause=self.ingame)
 
-    def start(self):
+    def start(self, resuming=False):
         self.pack(side=TOP)
         self.bind_all('<Key>', self.handle_key)
         self.ingame = True
-
-        self.delete(ALL)
-        self.dx, self.dy = 1, 0
-        self.board = Grid(self.columns, self.rows, self.dot_size)
-        self.create_image((0, 0), anchor=NW, image=self.game_img['frame'])
-        self.obj_tags = []
-        self.score_tags = []
+        
+        if not resuming:
+            self.load_options()
+            self.delete(ALL)
+            self.dx, self.dy = 1, 0
+            self.board = Grid(self.columns, self.rows, self.dot_size)
+            self.create_image((0, 0), anchor=NW, image=self.game_img['frame'])
+            self.obj_tags = []
+            self.score_tags = []
         self.step()
 
     def step(self):
@@ -91,7 +103,7 @@ class Game(Canvas):
             self.delete(*self.obj_tags)
             self.draw_grid()
             self.draw_score()
-            self.ident = self.after(DELAY, self.step)
+            self.ident = self.after(self.delay, self.step)
         except CollisionError:
             self.end_game()
 
@@ -106,7 +118,7 @@ class Game(Canvas):
     def draw_score(self):
         self.delete(*self.score_tags)
         self.score_tags = []
-        score = f'{1*self.board.score:04d}'
+        score = f'{self.level * self.board.score:04d}'
         coords = [[0, 0], [20, 0], [40, 0], [60, 0]] 
         for c, s in zip(coords, score):
             img = self.n_img['n'+s]
@@ -114,16 +126,31 @@ class Game(Canvas):
             self.score_tags.append(t)
 
     def end_game(self):
+        self.ingame = False
+        self.blink_count = 0
         def draw():
             self.blink_count += 1
             self.delete(*self.obj_tags)
-            self.after(250, clear)
+            self.after(300, clear)
         def clear():
             if self.blink_count < 5:
                 self.draw_grid()
-                self.after(250, draw)
-        self.mode = ''
-        self.blink_count = 0
+                self.after(300, draw)
+            else:
+                game_over()
+        def game_over():
+            self.delete(ALL)
+            img = self.game_img['game_over']
+            self.create_image([5, 0], anchor=NW, image=img)
+            score = f'{self.level * self.board.score}'
+            coords = [[5, 160], [45, 160], [85, 160], [125, 160]]
+            for c, s in zip(coords, score):
+                img = self.n_img['b'+s]
+                self.create_image(c, anchor=NW, image=img)
+            self.after(3000, go_to_menu)
+        def go_to_menu():
+            self.delete(ALL)
+            self.master.handle_function(self, 'main_menu')
         draw()
 ##############################################
 
