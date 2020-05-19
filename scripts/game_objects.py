@@ -4,9 +4,12 @@ Created on 15-mai-2020
 '''
 
 from random import randint
+from tkinter import BitmapImage
+
 
 class CollisionError(Exception):
     pass
+
 
 class Vector:
     def __init__(self, x, y):
@@ -56,29 +59,36 @@ class Vector:
         y = self[1] == value[1]
         return x and y
 
+    @staticmethod
+    def from_string(string):
+        x, y = string.replace('(', '').replace(')', '').split(',')
+        return Vector(int(x), int(y))
+
 
 class Snake:
-    def __init__(self, *args, size=4):
+    def __init__(self, x_range, y_range, maze):
         self.directions = {(1, 0): 'right',
                            (-1, 0): 'left',
                            (0, 1): 'down',
                            (0, -1): 'up'}
 
-        x0, y0 = args[0]
-        self.x_range = args[1]
-        self.y_range = args[2]
-        self.size = size
+        self.x_range = x_range
+        self.y_range = y_range
 
-        self.pos = [Vector(x0, y0)]
+        self.size = maze.size
+        self.pos = [maze.p0 - (1, 0)]
+        self.walls = maze.walls
+
         self.vel = [Vector(1, 0)]
         self.dir = [self.directions[(1, 0)]]
         self.food = ['']
-        for i in range(self.size):
-            self.pos += [Vector(x0 - i - 1, y0)]
+        for i in range(1, self.size+1):
+            self.pos += [self.pos[0] - i*self.vel[0]]
             self.vel += [Vector(1, 0)]
             self.dir += [self.directions[(self.vel[i][0], self.vel[i][1])]]
             self.food += ['']
         self.img = self.dir.copy()
+        self.crawl(1, 0, (0, 0))
 
     def __getitem__(self, idx):
         item = [self.pos[idx], self.img[idx]]
@@ -118,7 +128,6 @@ class Snake:
         else:
             food = ['']
         self.food = food + self.food
-             
         self.pop_last_item()
 
     def end_of_board(self):
@@ -135,8 +144,9 @@ class Snake:
 
     def pop_last_item(self):
         if self.food[-2] == '_food':
-            self.size += 1
             self.food[-2] = ''
+        if self.food[1] == '_food':
+            self.size += 1
         else:
             self.vel.pop()
             self.pos.pop()
@@ -158,13 +168,14 @@ class Snake:
         self.img = img
 
     def crawl(self, dx, dy, food_pos):
+        self.check_collision(dx, dy)
         self.update_attributes(dx, dy, food_pos)
         self.set_images(food_pos)
-        self.check_collision()
 
-    def check_collision(self):
-        if self.pos[0] in self.pos[1:]:
+    def check_collision(self, dx, dy):
+        if (self.pos[0] + Vector(dx, dy)) in (self.pos[1:] + self.walls):
             raise CollisionError
+
 
 class Food(Vector):
     def __init__(self, *args):
@@ -175,3 +186,34 @@ class Food(Vector):
     def draw(self):
         self.x = randint(0, self.x_range - 1)
         self.y = randint(0, self.y_range - 1)
+
+
+class Maze:
+    def __init__(self, name):
+        self.name = name
+        path = f'mazes/{name}'
+        with open(f'{path}.mze', 'r') as f:
+            lines = f.readlines()
+        lines = [line.strip() for line in lines]
+
+        self.highscore = int(lines[0])
+        self.p0 = Vector.from_string(lines[1])
+        self.size = int(lines[2])
+        self.frame = BitmapImage(file=f'{path}.xbm')
+        obstacles = []
+        try:
+            for wall in lines[3:]:
+                wall = wall.replace('(', '').replace(')', '')
+                p0, pf, d = wall.split('->')
+                p0 = Vector.from_string(p0)
+                pf = Vector.from_string(pf)
+                d = Vector.from_string(d)
+                i = 0
+                while True:
+                    obstacles.append(p0 + i*d)
+                    i += 1
+                    if obstacles[-1] == pf:
+                        break
+        except IndexError:
+            pass
+        self.walls = obstacles

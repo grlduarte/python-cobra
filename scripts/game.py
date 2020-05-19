@@ -6,16 +6,14 @@ Created on 17-mai-2020
 import glob
 from tkinter import *
 
-from scripts.grid import *
-
-
-DELAY = 400
+from scripts.game_objects import *
 
 class Game(Canvas):
     def __init__(self, master):
         self.master = master
         self.load_config()
         self.load_images()
+        self.ingame = False
         super().__init__(master, bg='#93c000',
                          width=self.width, height=self.height)
 
@@ -34,9 +32,9 @@ class Game(Canvas):
                      4: 300, 5: 225, 6: 185,
                      7: 135, 8: 115, 9: 90}
         with open('options', 'r') as f:
-            self.options = f.readlines()
-        self.level = int(self.options[0])
-        self.maze = self.options[1]
+            options = f.readlines()
+        self.level = int(options[0])
+        self.maze = Maze(options[1])
         self.delay = delay_map[self.level]
 
     def load_images(self):
@@ -87,11 +85,16 @@ class Game(Canvas):
         self.ingame = True
         
         if not resuming:
-            self.load_options()
             self.delete(ALL)
+            self.load_options()
             self.dx, self.dy = 1, 0
-            self.board = Grid(self.columns, self.rows, self.dot_size)
-            self.create_image((0, 0), anchor=NW, image=self.game_img['frame'])
+
+            self.snake = Snake(self.columns, self.rows, self.maze)
+            self.food = Food(self.columns, self.rows)
+            self.food.draw()
+            self.score = 0
+
+            self.create_image((0, 0), anchor=NW, image=self.maze.frame)
             self.obj_tags = []
             self.score_tags = []
         self.step()
@@ -99,26 +102,39 @@ class Game(Canvas):
     def step(self):
         try:
             self.handling = False
-            self.board.step(self.dx, self.dy)
+            self.snake.crawl(self.dx, self.dy, food_pos=self.food)
+            self.head_on_food()
             self.delete(*self.obj_tags)
-            self.draw_grid()
+            self.draw_objects()
             self.draw_score()
             self.ident = self.after(self.delay, self.step)
         except CollisionError:
             self.end_game()
 
-    def draw_grid(self):
+    def head_on_food(self):
+        if self.snake.pos[0] == self.food:
+            self.move_food()
+            self.score += 1
+
+    def move_food(self):
+        self.food.draw()
+        while self.food in (self.snake.pos + self.maze.walls):
+            self.food.draw()
+
+    def draw_objects(self):
+        items = ['food'] + self.snake.img
+        coords = [self.food] + self.snake.pos
         self.tags = []
-        for sq in self.board:
-            coords = list(self.origin + sq.coords[:2])
-            img = self.game_img[sq.obj]
-            t = self.create_image(coords, anchor=NW, image=img)
+        for c, i in zip(coords, items):
+            c = list(self.origin + self.dot_size * c)
+            img = self.game_img[i]
+            t = self.create_image(c, anchor=NW, image=img)
             self.obj_tags.append(t)
 
     def draw_score(self):
         self.delete(*self.score_tags)
         self.score_tags = []
-        score = f'{self.level * self.board.score:04d}'
+        score = f'{self.level * self.score:04d}'
         coords = [[0, 0], [20, 0], [40, 0], [60, 0]] 
         for c, s in zip(coords, score):
             img = self.n_img['n'+s]
@@ -134,7 +150,7 @@ class Game(Canvas):
             self.after(300, clear)
         def clear():
             if self.blink_count < 5:
-                self.draw_grid()
+                self.draw_objects()
                 self.after(300, draw)
             else:
                 game_over()
@@ -142,7 +158,7 @@ class Game(Canvas):
             self.delete(ALL)
             img = self.game_img['game_over']
             self.create_image([5, 0], anchor=NW, image=img)
-            score = f'{self.level * self.board.score}'
+            score = f'{self.level * self.score}'
             coords = [[5, 160], [45, 160], [85, 160], [125, 160]]
             for c, s in zip(coords, score):
                 img = self.n_img['b'+s]
@@ -152,6 +168,3 @@ class Game(Canvas):
             self.delete(ALL)
             self.master.handle_function(self, 'main_menu')
         draw()
-##############################################
-
-
