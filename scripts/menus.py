@@ -110,9 +110,9 @@ class Menu(Canvas):
 class MainMenu(Menu):
     def __init__(self, master):
         super().__init__(master)
-        self.items = ['new_game', 'level', 'mazes',
-                      'top_scores', 'instructions',
-                      'settings']
+        self.items = ['new_game', 'level', 'mazes',]
+                      #'top_scores', 'instructions',
+                      #'settings']
 
     def handle_return(self):
         self.active = False

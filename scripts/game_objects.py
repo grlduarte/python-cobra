@@ -168,12 +168,12 @@ class Snake:
         self.img = img
 
     def crawl(self, dx, dy, food_pos):
-        self.check_collision(dx, dy)
         self.update_attributes(dx, dy, food_pos)
         self.set_images(food_pos)
+        self.check_collision()
 
-    def check_collision(self, dx, dy):
-        if (self.pos[0] + Vector(dx, dy)) in (self.pos[1:] + self.walls):
+    def check_collision(self):
+        if self.pos[0] in (self.pos[1:] + self.walls):
             raise CollisionError
 
 

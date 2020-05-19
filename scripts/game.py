@@ -105,6 +105,8 @@ class Game(Canvas):
             self.snake.crawl(self.dx, self.dy, food_pos=self.food)
             self.head_on_food()
             self.delete(*self.obj_tags)
+            self.obj_img = ['food'] + self.snake.img
+            self.obj_coords = [self.food] + self.snake.pos
             self.draw_objects()
             self.draw_score()
             self.ident = self.after(self.delay, self.step)
@@ -122,10 +124,8 @@ class Game(Canvas):
             self.food.draw()
 
     def draw_objects(self):
-        items = ['food'] + self.snake.img
-        coords = [self.food] + self.snake.pos
         self.tags = []
-        for c, i in zip(coords, items):
+        for c, i in zip(self.obj_coords, self.obj_img):
             c = list(self.origin + self.dot_size * c)
             img = self.game_img[i]
             t = self.create_image(c, anchor=NW, image=img)
